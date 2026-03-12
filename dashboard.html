@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dashboard de inversión</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f0;color:#1a1a1a;padding:1.5rem;}
+h1{font-size:20px;font-weight:500;margin-bottom:1.5rem;}
+.top-bar{display:flex;gap:10px;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center;}
+.top-bar input{flex:1;min-width:180px;font-size:14px;padding:9px 12px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#1a1a1a;}
+.top-bar input::placeholder{color:#aaa;}
+.top-bar button{font-size:13px;padding:9px 18px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer;color:#555;}
+.top-bar button:hover{background:#f0f0f0;}
+.suggestions{background:#fff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:1rem;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+.sug-item{padding:10px 14px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;color:#1a1a1a;}
+.sug-item:hover{background:#f7f7f5;}
+.sug-item span{color:#888;}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem;}
+.metric{background:#fff;border-radius:8px;padding:14px 16px;border:1px solid #ebebeb;}
+.metric .lbl{font-size:11px;color:#888;margin-bottom:5px;}
+.metric .val{font-size:21px;font-weight:500;}
+.metric .sub{font-size:11px;margin-top:3px;}
+.up{color:#1a7a3e;}.down{color:#b22020;}.neutral{color:#888;}
+.card{background:#fff;border-radius:12px;border:1px solid #ebebeb;padding:1.25rem;margin-bottom:1.25rem;}
+.card-title{font-size:13px;font-weight:500;margin-bottom:1rem;}
+.badge{font-size:12px;padding:4px 12px;border-radius:20px;font-weight:500;}
+.badge-buy{background:#e6f4ea;color:#1a7a3e;}
+.badge-wait{background:#fef3cd;color:#8a6200;}
+.badge-caution{background:#fce8e6;color:#9c2a1e;}
+.signal-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;}
+.signal-text{font-size:13px;color:#555;line-height:1.6;}
+.ma-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:.75rem;}
+.ma-item{border-radius:8px;padding:10px 12px;text-align:center;}
+.ma-item .ma-lbl{font-size:11px;margin-bottom:4px;}
+.ma-item .ma-val{font-size:15px;font-weight:500;}
+.ma-item .ma-rel{font-size:11px;margin-top:3px;}
+.ma-hint{font-size:11px;color:#aaa;}
+.rsi-row{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
+.rsi-big{font-size:26px;font-weight:500;}
+.rsi-status{font-size:12px;}
+.rsi-track{width:100%;height:18px;border-radius:4px;background:linear-gradient(to right,#e6f4ea 0%,#e6f4ea 30%,#fef3cd 30%,#fef3cd 70%,#fce8e6 70%,#fce8e6 100%);position:relative;margin:8px 0;overflow:hidden;}
+.rsi-marker{position:absolute;top:0;width:3px;height:100%;background:#185FA5;border-radius:2px;transition:left .4s;}
+.rsi-labels{display:flex;justify-content:space-between;font-size:11px;color:#aaa;}
+.wl-row{display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;}
+.wl-row:last-child{border-bottom:none;}
+.wt{font-weight:500;min-width:55px;}
+.wn{color:#888;flex:1;padding:0 8px;}
+.wp{min-width:65px;text-align:right;}
+.ws{min-width:80px;text-align:right;}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;}
+.dot-buy{background:#1a7a3e;}.dot-wait{background:#8a6200;}.dot-caution{background:#b22020;}
+.chart-wrap{position:relative;width:100%;height:220px;margin-bottom:1.25rem;}
+.legend{display:flex;gap:16px;margin-bottom:8px;font-size:11px;color:#888;flex-wrap:wrap;}
+.legend span{display:flex;align-items:center;gap:4px;}
+.legend i{display:inline-block;width:22px;height:2px;}
+.loader{text-align:center;padding:2rem;font-size:14px;color:#aaa;}
+.error-msg{background:#fce8e6;color:#9c2a1e;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:1rem;}
+.server-note{background:#fef3cd;color:#8a6200;font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:1.25rem;line-height:1.6;}
+</style>
+</head>
+<body>
+
+<h1>Dashboard de inversión</h1>
+
+<div class="server-note">
+  Conectado a tu servidor local en <strong>http://localhost:3001</strong>. Asegúrate de que el servidor está corriendo antes de buscar.
+</div>
+
+<div class="top-bar">
+  <input type="text" id="searchInput" placeholder="Buscar ticker: VOO, SPY, AAPL..." oninput="onSearch()" onkeydown="if(event.key==='Enter')doSearch()"/>
+  <button onclick="doSearch()">Buscar</button>
+</div>
+
+<div id="suggestionsBox" style="display:none;" class="suggestions"></div>
+<div id="errorBox" style="display:none;" class="error-msg"></div>
+<div id="loaderBox" style="display:none;" class="loader">Consultando Yahoo Finance...</div>
+
+<div id="mainContent" style="display:none;">
+  <div class="metrics" id="metricsGrid"></div>
+
+  <div class="card">
+    <div class="signal-row">
+      <span class="card-title" style="margin-bottom:0;">Señal IA</span>
+      <span class="badge" id="signalBadge"></span>
+    </div>
+    <div class="signal-text" id="signalText"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Medias móviles</div>
+    <div class="ma-grid" id="maGrid"></div>
+    <div class="ma-hint">Verde = precio por encima &nbsp;·&nbsp; Rojo = precio por debajo &nbsp;·&nbsp; Gris = muy cercano</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">RSI — índice de fuerza relativa</div>
+    <div class="rsi-row">
+      <span class="rsi-big" id="rsiVal">—</span>
+      <span class="rsi-status" id="rsiStatus"></span>
+    </div>
+    <div class="rsi-track"><div class="rsi-marker" id="rsiMarker" style="left:50%"></div></div>
+    <div class="rsi-labels">
+      <span>0 — sobreventa</span><span>30</span><span>50 — neutral</span><span>70</span><span>100 — sobrecompra</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:.75rem;">
+    <div class="card-title">Precio — últimos 60 días</div>
+    <div class="legend">
+      <span><i style="background:#1D9E75;"></i>Precio</span>
+      <span><i style="background:#378ADD;border-top:2px dashed #378ADD;height:0;"></i>MA50</span>
+      <span><i style="background:#EF9F27;border-top:2px dashed #EF9F27;height:0;"></i>MA100</span>
+      <span><i style="background:#E24B4A;border-top:2px dashed #E24B4A;height:0;"></i>MA200</span>
+    </div>
+    <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Watchlist reciente</div>
+    <div id="watchlistRows"></div>
+  </div>
+</div>
+
+<script>
+const SERVER = 'https://investment-dashboard-production-4493.up.railway.app';
+const recentHistory = [];
+let chartInst = null;
+
+const POPULAR = ['VOO','SPY','QQQ','AAPL','MSFT','NVDA','AMZN','TSLA','META','VTI','IVV','BRK-B','GLD','AMD','GOOGL'];
+
+function onSearch() {
+  const q = document.getElementById('searchInput').value.trim().toUpperCase();
+  const box = document.getElementById('suggestionsBox');
+  if (!q) { box.style.display = 'none'; return; }
+  const matches = POPULAR.filter(t => t.startsWith(q) || t.includes(q));
+  if (!matches.length) { box.style.display = 'none'; return; }
+  box.innerHTML = matches.slice(0,6).map(t =>
+    `<div class="sug-item" onclick="selectTicker('${t}')"><strong>${t}</strong><span>sugerencia</span></div>`
+  ).join('');
+  box.style.display = 'block';
+}
+
+function selectTicker(ticker) {
+  document.getElementById('searchInput').value = ticker;
+  document.getElementById('suggestionsBox').style.display = 'none';
+  doSearch();
+}
+
+async function doSearch() {
+  const ticker = document.getElementById('searchInput').value.trim().toUpperCase();
+  if (!ticker) return;
+  document.getElementById('suggestionsBox').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('loaderBox').style.display = 'block';
+  document.getElementById('mainContent').style.display = 'none';
+
+  try {
+    const res = await fetch(`${SERVER}/quote?ticker=${encodeURIComponent(ticker)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error desconocido');
+    renderDashboard(data);
+    addToWatchlist(data);
+  } catch (e) {
+    document.getElementById('loaderBox').style.display = 'none';
+    const errBox = document.getElementById('errorBox');
+    errBox.textContent = `Error: ${e.message}. ¿El servidor está corriendo en localhost:3001?`;
+    errBox.style.display = 'block';
+  }
+}
+
+function getMaStatus(price, ma) {
+  if (!ma) return { cls: 'neutral', rel: 'Sin datos', bg: '#f5f5f0', tc: '#888' };
+  const pct = ((price - ma) / ma * 100);
+  if (pct > 1)  return { cls: 'up',      rel: `+${pct.toFixed(1)}%`, bg: '#e6f4ea', tc: '#1a7a3e' };
+  if (pct < -1) return { cls: 'down',    rel: `${pct.toFixed(1)}%`,  bg: '#fce8e6', tc: '#9c2a1e' };
+  return { cls: 'neutral', rel: 'Muy cercano', bg: '#f5f5f0', tc: '#888' };
+}
+
+function getRsiInfo(rsi) {
+  if (rsi <= 30) return { text: 'Sobreventa — posible rebote', cls: 'up' };
+  if (rsi >= 70) return { text: 'Sobrecompra — posible corrección', cls: 'down' };
+  if (rsi < 50)  return { text: 'Zona neutral-baja', cls: 'neutral' };
+  return { text: 'Zona neutral-alta', cls: 'neutral' };
+}
+
+function renderDashboard(d) {
+  document.getElementById('loaderBox').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+  document.title = `${d.ticker} — Dashboard`;
+
+  document.getElementById('metricsGrid').innerHTML = `
+    <div class="metric"><div class="lbl">Precio</div><div class="val">$${d.price.toFixed(2)}</div><div class="sub ${d.chg >= 0 ? 'up' : 'down'}">${d.chg >= 0 ? '+' : ''}${d.chg}% hoy</div></div>
+    <div class="metric"><div class="lbl">RSI (14d)</div><div class="val">${d.rsi}</div><div class="sub ${getRsiInfo(d.rsi).cls}">${d.rsi <= 30 ? 'Sobreventa' : d.rsi >= 70 ? 'Sobrecompra' : 'Neutral'}</div></div>
+    <div class="metric"><div class="lbl">vs MA200</div><div class="val ${getMaStatus(d.price, d.ma200).cls}" style="font-size:16px;">${getMaStatus(d.price, d.ma200).rel}</div><div class="sub neutral">largo plazo</div></div>
+    <div class="metric"><div class="lbl">Señal</div><div class="val" style="font-size:15px;">${d.signal === 'buy' ? 'Comprar' : d.signal === 'wait' ? 'Esperar' : 'Precaución'}</div></div>
+  `;
+
+  const badge = document.getElementById('signalBadge');
+  badge.className = 'badge badge-' + d.signal;
+  badge.textContent = d.signal === 'buy' ? 'Momento favorable' : d.signal === 'wait' ? 'Esperar señal' : 'Alta precaución';
+  document.getElementById('signalText').textContent = d.desc;
+
+  const mas = [{ lbl: 'MA 50', val: d.ma50 }, { lbl: 'MA 100', val: d.ma100 }, { lbl: 'MA 200', val: d.ma200 }];
+  document.getElementById('maGrid').innerHTML = mas.map(m => {
+    const s = getMaStatus(d.price, m.val);
+    return `<div class="ma-item" style="background:${s.bg};">
+      <div class="ma-lbl" style="color:${s.tc};">${m.lbl}</div>
+      <div class="ma-val" style="color:${s.tc};">$${m.val ? m.val.toFixed(1) : '—'}</div>
+      <div class="ma-rel" style="color:${s.tc};">${s.rel}</div>
+    </div>`;
+  }).join('');
+
+  const rsiInfo = getRsiInfo(d.rsi);
+  document.getElementById('rsiVal').textContent = d.rsi;
+  document.getElementById('rsiStatus').textContent = rsiInfo.text;
+  document.getElementById('rsiStatus').className = 'rsi-status ' + rsiInfo.cls;
+  document.getElementById('rsiMarker').style.left = d.rsi + '%';
+
+  const labels = Array.from({ length: d.closes.length }, (_, i) =>
+    i % 15 === 0 ? `D-${d.closes.length - 1 - i}` : ''
+  );
+  if (chartInst) chartInst.destroy();
+  chartInst = new Chart(document.getElementById('priceChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { data: d.closes, borderColor: d.chg >= 0 ? '#1D9E75' : '#E24B4A', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: true, backgroundColor: d.chg >= 0 ? 'rgba(29,158,117,0.06)' : 'rgba(226,75,74,0.06)', label: 'Precio' },
+        { data: Array(d.closes.length).fill(d.ma50),  borderColor: '#378ADD', borderWidth: 1, borderDash: [4, 3], pointRadius: 0, label: 'MA50' },
+        { data: Array(d.closes.length).fill(d.ma100), borderColor: '#EF9F27', borderWidth: 1, borderDash: [4, 3], pointRadius: 0, label: 'MA100' },
+        { data: Array(d.closes.length).fill(d.ma200), borderColor: '#E24B4A', borderWidth: 1, borderDash: [4, 3], pointRadius: 0, label: 'MA200' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 }, color: '#aaa', autoSkip: false, maxRotation: 0 }, grid: { display: false } },
+        y: { ticks: { font: { size: 10 }, color: '#aaa', callback: v => '$' + v.toFixed(0) }, grid: { color: 'rgba(0,0,0,0.04)' } }
+      }
+    }
+  });
+}
+
+function addToWatchlist(d) {
+  const idx = recentHistory.findIndex(r => r.ticker === d.ticker);
+  if (idx > -1) recentHistory.splice(idx, 1);
+  recentHistory.unshift(d);
+  if (recentHistory.length > 6) recentHistory.pop();
+  renderWatchlist();
+}
+
+function renderWatchlist() {
+  if (!recentHistory.length) {
+    document.getElementById('watchlistRows').innerHTML = '<div style="font-size:13px;color:#aaa;padding:4px 0;">Busca un ticker para agregarlo aquí.</div>';
+    return;
+  }
+  document.getElementById('watchlistRows').innerHTML = recentHistory.map(r =>
+    `<div class="wl-row">
+      <span class="wt">${r.ticker}</span>
+      <span class="wn">${r.name}</span>
+      <span class="wp">$${r.price.toFixed(2)}</span>
+      <span class="ws"><span class="dot dot-${r.signal}"></span>${r.signal === 'buy' ? 'Comprar' : r.signal === 'wait' ? 'Esperar' : 'Precaución'}</span>
+    </div>`
+  ).join('');
+}
+
+renderWatchlist();
+</script>
+</body>
+</html>
